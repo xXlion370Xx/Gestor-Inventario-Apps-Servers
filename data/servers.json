@@ -1,0 +1,32 @@
+[
+    {
+        "id": "abf58e17-d5c3-443d-b647-7991f9cae625",
+        "name": "Server1",
+        "ip": "120.12.12.22",
+        "os_type": "Windows",
+        "location": "Cra 5 n",
+        "roles": [
+            "admin"
+        ]
+    },
+    {
+        "id": "e13228f6-6360-4541-9e82-8221cee64664",
+        "name": "Daniel",
+        "ip": "2.112",
+        "os_type": "mac",
+        "location": "miami",
+        "roles": [
+            "Admin"
+        ]
+    },
+    {
+        "id": "a9664880-5368-4bf0-9337-0180563c83f2",
+        "name": "s",
+        "ip": "21312s.212.12.321",
+        "os_type": "os",
+        "location": "miami",
+        "roles": [
+            "Admin"
+        ]
+    }
+]
