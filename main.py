@@ -1,4 +1,5 @@
-import json
+from rich.console import Console
+from rich.table import Table
 import uuid
 import logging
 from pathlib import Path
@@ -118,7 +119,50 @@ def main_menu():
                 print("Application registered successfully!")
                 
             elif choice == "3":
-                query_server_status()
+                # Crear una consola para mostrar la salida
+                console = Console()
+
+                # Obtener todos los servidores
+                servers = Server.get_all_servers()
+
+                if not servers:
+                    console.print("[bold red]No servers available to display.[/bold red]")
+                else:
+                    # Crear una tabla para los servidores con una columna adicional para las aplicaciones asociadas
+                    server_table = Table(title="Servers and Associated Applications", show_header=True, header_style="bold magenta")
+                    server_table.add_column("Name", justify="left")
+                    server_table.add_column("IP", justify="left")
+                    server_table.add_column("OS", justify="left")
+                    server_table.add_column("Location", justify="left")
+                    server_table.add_column("Roles", justify="left")
+                    server_table.add_column("Applications", justify="left")
+
+                    for server in servers:
+                        # Obtener las aplicaciones asociadas a este servidor
+                        applications = Server().get_server_applications(server["id"])
+
+                        # Crear una representación de las aplicaciones como texto
+                        if not applications:
+                            app_details = "[dim]No applications associated.[/dim]"
+                        else:
+                            app_details = "\n".join(
+                                f"{app['name']} (v{app['version']}) - {app['status']}"
+                                for app in applications
+                            )
+
+                        # Añadir la fila con los datos del servidor y sus aplicaciones
+                        server_table.add_row(
+                            server["name"],
+                            server["ip"],
+                            server["os_type"],
+                            server["location"],
+                            ", ".join(server["roles"]),
+                            app_details,
+                        )
+
+                    # Mostrar la tabla completa
+                    console.print(server_table)
+
             elif choice == "4":
                 modify_server_or_app()
             elif choice == "5":
