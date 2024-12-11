@@ -44,10 +44,10 @@ Este proyecto permite gestionar un inventario de servidores y las aplicaciones q
    
    #### En Windows
    ```bash
-   pip install -r requirements.txt
+   python main.py
    ```
  
    #### En Linux/Mac
    ```bash
-   pip3 install -r requirements.txt
+   python3 main.py
    ```
