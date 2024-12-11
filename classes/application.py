@@ -1,6 +1,5 @@
 import csv
 from pathlib import Path
-from classes.server import Server
 import logging
 
 class Application:
@@ -10,6 +9,10 @@ class Application:
         self.install_date = install_date
         self.status = status
         self.server_id = server_id
+
+    log_file = Path("logs/inventory.log")
+    log_file.parent.mkdir(exist_ok=True)
+    logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
     applications_file = Path("data/applications.csv")
     applications_file.parent.mkdir(exist_ok=True)
@@ -43,15 +46,57 @@ class Application:
                 return False
         return True
 
-    def load_applications(self):
+    @classmethod
+    def get_all_applications(self):
         if self.applications_file.exists() and self.applications_file.stat().st_size > 0:
             with open(self.applications_file, mode='r') as file:
                 reader = csv.DictReader(file)
                 return list(reader)
         return []
 
+    @classmethod
     def save_application(self, application):
         with open(self.applications_file, mode='a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow([application["name"], application["version"],
                             application["install_date"], application["status"], application["server_id"]])
+
+    @classmethod
+    def remove_application(cls, app_name):
+        """Remove a specific application by name."""
+        if not cls.applications_file.exists() or cls.applications_file.stat().st_size == 0:
+            print("No applications available.")
+            return
+
+        applications = []
+        found = False
+        removed_app = None
+        with open(cls.applications_file, mode="r") as file:
+            reader = csv.DictReader(file)
+            fieldnames = reader.fieldnames
+            for row in reader:
+                if row["name"] == app_name:
+                    found = True
+                    removed_app = row  # Store the removed application
+                else:
+                    applications.append(row)
+
+        if found:
+            # Write updated applications back to the CSV file
+            with open(cls.applications_file, mode="w", newline="") as file:
+                writer = csv.DictWriter(file, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(applications)
+
+            logging.info(f"Removed application: {removed_app}")
+            print(f"Application '{app_name}' has been deleted.")
+        else:
+            print(f"Application '{app_name}' not found.")
+            
+    @staticmethod
+    def save_all_applications(applications):
+        with open('data/applications.csv', mode='w', newline='') as file:
+            fieldnames = ['name', 'version', 'install_date', 'status', 'server_id']
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(applications)

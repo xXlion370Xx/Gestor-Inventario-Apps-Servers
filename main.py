@@ -5,6 +5,8 @@ import logging
 from pathlib import Path
 from classes.server import Server
 from classes.application import Application
+import csv
+import json
 
 # Configurar logging
 log_file = Path("logs/inventory.log")
@@ -43,7 +45,7 @@ def main_menu():
         try:
             if choice == "1":
                 server = Server()
-                servers = server.load_servers()
+                servers = Server.get_all_servers()
 
                 # Solicitar datos al usuario
                 name = input("Enter server name: ").strip()
@@ -74,11 +76,10 @@ def main_menu():
                 print("Server registered successfully!")
                 
             elif choice == "2":
-                server = Server()
-                servers = server.load_servers()
+                servers = Server.get_all_servers()
                 
                 app = Application()
-                aplications = app.load_applications()
+                aplications = app.get_all_applications()
                 
                 if not servers:
                     print("No servers available. Please register a server first.")
@@ -128,47 +129,282 @@ def main_menu():
                 if not servers:
                     console.print("[bold red]No servers available to display.[/bold red]")
                 else:
-                    # Crear una tabla para los servidores con una columna adicional para las aplicaciones asociadas
-                    server_table = Table(title="Servers and Associated Applications", show_header=True, header_style="bold magenta")
-                    server_table.add_column("Name", justify="left")
-                    server_table.add_column("IP", justify="left")
-                    server_table.add_column("OS", justify="left")
-                    server_table.add_column("Location", justify="left")
-                    server_table.add_column("Roles", justify="left")
-                    server_table.add_column("Applications", justify="left")
-
                     for server in servers:
-                        # Obtener las aplicaciones asociadas a este servidor
-                        applications = Server().get_server_applications(server["id"])
+                        # Crear la tabla para el servidor actual
+                        server_table = Table(title=f"Server: {server['name']} ({server['id']})", show_header=True, header_style="bold magenta")
+                        server_table.add_column("Name", justify="left")
+                        server_table.add_column("IP", justify="left")
+                        server_table.add_column("OS", justify="left")
+                        server_table.add_column("Location", justify="left")
+                        server_table.add_column("Roles", justify="left")
 
-                        # Crear una representación de las aplicaciones como texto
-                        if not applications:
-                            app_details = "[dim]No applications associated.[/dim]"
-                        else:
-                            app_details = "\n".join(
-                                f"{app['name']} (v{app['version']}) - {app['status']}"
-                                for app in applications
-                            )
-
-                        # Añadir la fila con los datos del servidor y sus aplicaciones
                         server_table.add_row(
                             server["name"],
                             server["ip"],
                             server["os_type"],
                             server["location"],
                             ", ".join(server["roles"]),
-                            app_details,
                         )
 
-                    # Mostrar la tabla completa
-                    console.print(server_table)
+                        # Mostrar la tabla del servidor
+                        console.print(server_table)
 
+                        # Obtener las aplicaciones asociadas al servidor
+                        applications = Server().get_server_applications(server["id"])
+
+                        if not applications:
+                            console.print("[dim]No applications associated with this server.[/dim]")
+                        else:
+                            # Crear la tabla para las aplicaciones asociadas
+                            app_table = Table(title="Associated Applications", show_header=True, header_style="bold cyan")
+                            app_table.add_column("Name", justify="left")
+                            app_table.add_column("Version", justify="center")
+                            app_table.add_column("Install Date", justify="center")
+                            app_table.add_column("Status", justify="center")
+
+                            for app in applications:
+                                app_table.add_row(
+                                    app["name"],
+                                    app["version"],
+                                    app["install_date"],
+                                    app["status"],
+                                )
+
+                            # Mostrar la tabla de aplicaciones asociadas
+                            console.print(app_table)
             elif choice == "4":
-                modify_server_or_app()
+                console = Console()
+
+                print("\nModify Information")
+                print("1. Edit Server")
+                print("2. Edit Application")
+                sub_choice = input("Select an option: ").strip()
+
+                if sub_choice == "1":
+                    servers = Server.get_all_servers()
+                    if not servers:
+                        print("No servers available to edit.")
+                    else:
+                        print("[bold magenta]Available Servers:[/bold magenta]")
+                        for idx, server in enumerate(servers, 1):
+                            print(f"{idx}. {server['name']} (IP: {server['ip']})")
+
+                        try:
+                            server_index = int(input("Select the server to edit (by number): ").strip()) - 1
+                            if server_index < 0 or server_index >= len(servers):
+                                print("Invalid selection.")
+                            else:
+                                selected_server = servers[server_index]
+                                print(f"Selected Server: {selected_server['name']} (IP: {selected_server['ip']})")
+
+                                # Ask user for field to edit
+                                print("Fields available to edit: name, ip, os_type, location, roles")
+                                field_to_edit = input("Enter the field to edit: ").strip().lower()
+                                
+                                if field_to_edit not in selected_server:
+                                    print("Invalid field.")
+                                else:
+                                    # Ask user for new value
+                                    if field_to_edit == "roles":
+                                        new_value = input(f"Enter the new roles as a comma-separated list: ").strip().split(',')
+                                        new_value = [role.strip() for role in new_value]
+                                    else:
+                                        new_value = input(f"Enter the new value for {field_to_edit}: ").strip()
+
+                                    confirm = input(f"Confirm change {field_to_edit} from '{selected_server[field_to_edit]}' to '{new_value}'? (yes/no): ").strip().lower()
+                                    
+                                    if confirm == "yes":
+                                        # Log changes before applying
+                                        logging.basicConfig(filename='logs/servers.log', level=logging.INFO, 
+                                                            format='%(asctime)s - %(levelname)s - %(message)s')
+                                        
+                                        old_value = selected_server[field_to_edit]
+                                        servers[server_index][field_to_edit] = new_value
+                                        
+                                        # Save changes back to the JSON file
+                                        Server.save_all_servers(servers)
+                                        
+                                        logging.info(f"Modified server '{selected_server['name']}': {field_to_edit} changed from '{old_value}' to '{new_value}'.")
+                                        print(f"{field_to_edit.capitalize()} updated successfully.")
+                                    else:
+                                        print("Change cancelled.")
+                        except ValueError:
+                            print("Invalid input. Please enter a valid number.")
+                elif sub_choice == "2":
+                    # List all applications
+                    applications = Application.get_all_applications()
+                    if not applications:
+                        print("No applications available to edit.")
+                    else:
+                        print("[bold cyan]Available Applications:[/bold cyan]")
+                        for idx, app in enumerate(applications, 1):
+                            print(f"{idx}. {app['name']} (Version: {app['version']})")
+                        
+                        try:
+                            app_index = int(input("Select the application to edit (by number): ").strip()) - 1
+                            if app_index < 0 or app_index >= len(applications):
+                                print("Invalid selection.")
+                            else:
+                                selected_app = applications[app_index]
+                                print(f"Selected Application: {selected_app['name']} (Version: {selected_app['version']})")
+                                
+                                # Ask user for field to edit
+                                print("Fields available to edit: name, version, install_date, status, server_id")
+                                field_to_edit = input("Enter the field to edit: ").strip().lower()
+                                
+                                if field_to_edit not in selected_app:
+                                    print("Invalid field.")
+                                else:
+                                    # Ask user for new value
+                                    new_value = input(f"Enter the new value for {field_to_edit}: ").strip()
+                                    confirm = input(f"Confirm change {field_to_edit} from '{selected_app[field_to_edit]}' to '{new_value}'? (yes/no): ").strip().lower()
+                                    
+                                    if confirm == "yes":
+                                        # Log changes before applying
+                                        logging.basicConfig(filename='logs/inventory.log', level=logging.INFO, 
+                                                            format='%(asctime)s - %(levelname)s - %(message)s')
+                                        
+                                        old_value = selected_app[field_to_edit]
+                                        applications[app_index][field_to_edit] = new_value
+                                        
+                                        # Save changes back to the CSV file
+                                        Application.save_all_applications(applications)
+                                        
+                                        logging.info(f"Modified application '{selected_app['name']}': {field_to_edit} changed from '{old_value}' to '{new_value}'.")
+                                        print(f"{field_to_edit.capitalize()} updated successfully.")
+                                    else:
+                                        print("Change cancelled.")
+                        except ValueError:
+                            print("Invalid input. Please enter a valid number.")
+
             elif choice == "5":
-                delete_server_or_app()
+                print("\nWhat would you like to do?")
+                print("1. Delete a server (and its applications)")
+                print("2. Delete a specific application")
+                print("3. Exit")
+                choice = input("Enter your choice: ").strip()
+
+                if choice == "1":
+                    # Delete a server
+                    servers = Server.get_all_servers()
+                    if not servers:
+                        print("No servers available to delete.")
+                    else:
+                        print("\n[bold magenta]Available Servers:[/bold magenta]")
+                        for idx, server in enumerate(servers, 1):
+                            print(f"{idx}. {server['name']} (IP: {server['ip']})")
+
+                        try:
+                            server_index = int(input("Select the server to delete (by number): ").strip()) - 1
+                            if server_index < 0 or server_index >= len(servers):
+                                print("Invalid selection.")
+                            else:
+                                selected_server = servers[server_index]
+                                server_id = selected_server["id"]
+
+                                # Confirm deletion
+                                confirm = input(f"Are you sure you want to delete server '{selected_server['name']}' and all its applications? (yes/no): ").strip().lower()
+                                if confirm == "yes":
+                                    # Remove associated applications
+                                    Server.remove_server_applications(server_id)
+
+                                    # Remove the server from the list
+                                    servers.pop(server_index)
+
+                                    # Save updated server list
+                                    Server.save_all_servers(servers)
+
+                                    print(f"Server '{selected_server['name']}' and all its applications have been deleted.")
+                                else:
+                                    print("Deletion cancelled.")
+                        except ValueError:
+                            print("Invalid input. Please enter a valid number.")
+                
+                elif choice == "2":
+                    applications = []
+                    
+                    if Server.applications_file.exists() and Server.applications_file.stat().st_size > 0:
+                        with open(Server.applications_file, mode="r") as file:
+                            reader = csv.DictReader(file)
+                            applications = list(reader)
+
+                    if not applications:
+                        print("No applications available to delete.")
+                    else:
+                        print("\nAvailable Applications:")
+                        for idx, app in enumerate(applications, 1):
+                            print(f"{idx}. {app['name']} (Version: {app['version']}, Server ID: {app['server_id']})")
+
+                        try:
+                            app_index = int(input("Select the application to delete (by number): ").strip()) - 1
+                            if app_index < 0 or app_index >= len(applications):
+                                print("Invalid selection.")
+                            else:
+                                selected_app = applications[app_index]
+                                app_name = selected_app["name"]
+
+                                # Confirm deletion
+                                confirm = input(f"Are you sure you want to delete application '{app_name}'? (yes/no): ").strip().lower()
+                                if confirm == "yes":
+                                    Application.remove_application(app_name)
+                                else:
+                                    print("Deletion cancelled.")
+                        except ValueError:
+                            print("Invalid input. Please enter a valid number.")
+                
+                elif choice == "3":
+                    print("Exiting...")
+                    break
+                else:
+                    print("Invalid choice. Please enter 1, 2, or 3.")
             elif choice == "6":
-                generate_inventory_report()
+                report_type = input("Enter the report type (csv/json): ").strip().lower()
+                report_file = None
+
+                if report_type not in ["csv", "json"]:
+                    print("Invalid report type. Please choose 'csv' or 'json'.")
+                else:
+                    servers = Server.get_all_servers()
+                    if not servers:
+                        print("No servers available to generate a report.")
+                    else:
+                        report_data = []
+
+                        # Collect server and application data
+                        for server in servers:
+                            server_id = server["id"]
+                            applications = Server.get_server_applications(server_id)
+
+                            server_info = {
+                                "Server Name": server["name"],
+                                "IP": server["ip"],
+                                "OS Type": server["os_type"],
+                                "Location": server["location"],
+                                "Applications": [{"name": app["name"], "version": app["version"]} for app in applications]
+                            }
+                            report_data.append(server_info)
+
+                        # Generate the report
+                        report_path = Path("data/")
+                        report_path.mkdir(exist_ok=True)
+
+                        if report_type == "csv":
+                            report_file = report_path / "server_applications_report.csv"
+                            with open(report_file, mode="w", newline="", encoding="utf-8") as file:
+                                writer = csv.writer(file)
+                                # Write headers
+                                writer.writerow(["Server Name", "IP", "OS Type", "Location", "Applications"])
+                                # Write data
+                                for server_info in report_data:
+                                    app_list = "; ".join([f"{app['name']} (v{app['version']})" for app in server_info["Applications"]])
+                                    writer.writerow([server_info["Server Name"], server_info["IP"], server_info["OS Type"], server_info["Location"], app_list])
+                        elif report_type == "json":
+                            report_file = report_path / "server_applications_report.json"
+                            with open(report_file, mode="w", encoding="utf-8") as file:
+                                json.dump(report_data, file, indent=4)
+
+                        print(f"Report successfully generated and saved at: {report_file}")
+                        
             elif choice == "7":
                 audit_inventory_changes()
             elif choice == "0":
